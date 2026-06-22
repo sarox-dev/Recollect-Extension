@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recollect</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="popup-shell">
+      <header class="popup-header">
+        <img class="logo" src="recollect-logo.png" alt="Recollect logo" />
+        <div>
+          <h1>Recollect</h1>
+          <p>Save highlighted text as markdown.</p>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="section">
+          <h2>How to use</h2>
+          <ul>
+            <li><strong>Context Menu:</strong> Select text on any website, right-click, and choose "Save highlight to Recollect"</li>
+            <li><strong>Keyboard Shortcut:</strong> Select text and press <kbd>Ctrl+Shift+S</kbd> (or <kbd>Cmd+Shift+S</kbd> on Mac)</li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <h2>What gets saved</h2>
+          <p>Your highlights are saved as markdown files with metadata including:</p>
+          <ul>
+            <li>Source URL and domain</li>
+            <li>Page title</li>
+            <li>Date and timestamp</li>
+            <li>The highlighted text</li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <h2>Save Location</h2>
+          <p>Files are saved to your Downloads folder by default. When you save a highlight, you'll be prompted to choose a location.</p>
+          <button id="openDownloadsButton" class="primary-button">Open Downloads Folder</button>
+        </div>
+
+        <div class="section stats">
+          <p>Highlights saved: <strong id="savedCount">0</strong></p>
+        </div>
+      </section>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

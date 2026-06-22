@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Recollect",
+  "short_name": "Recollect",
+  "version": "1.0.0",
+  "description": "Save highlighted text from websites as organized markdown files with metadata.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "downloads"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Recollect Settings"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "commands": {
+    "save-selection": {
+      "suggested_key": {
+        "windows": "Ctrl+Shift+E",
+        "linux": "Ctrl+Shift+E"
+      },
+      "description": "Save selected text instantly"
+    }
+  },
+  "icons": {
+    "16": "icons/recollect-icon.png",
+    "32": "icons/recollect-icon.png",
+    "48": "icons/recollect-icon.png",
+    "128": "icons/recollect-icon.png"
+  }
+}
