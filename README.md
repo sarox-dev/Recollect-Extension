@@ -1,7 +1,9 @@
-<h1 align="center">Recollect — Browser Extension</h1>
-
+<h1 align="center">Recollect Browser Extension</h1>
 <p align="center">
-  Save highlighted text from any webpage directly to your Recollect knowledge base.
+  <img src="recollect-logo.png" width="120" height="120" alt="Recollect logo" />
+</p>
+<p align="center">
+  Save web content directly to your private Recollect knowledge base with a single shortcut.
 </p>
 
 <div align="center">
@@ -15,23 +17,27 @@
 
 ## What is this?
 
-The **Recollect browser extension** bridges your web browsing to your self-hosted Recollect server. Select text on any page, save it with a click — and it becomes instantly searchable in your personal knowledge base.
+The **Recollect browser extension** bridges your web browsing to your self-hosted Recollect server. Select text on any page, save it with a click and it becomes instantly searchable in your personal knowledge base.
 
-Works offline. No tracking. Your data stays on your machine.
+No tracking. Local-first. Your data stays on your machine.
 
 ---
 
 ## Features
-
-- ✂️ **Save highlights** — Select text → save directly to Recollect
-- ⌨️ **Keyboard shortcut** — `Alt+Shift+R` to save without leaving your flow
-- 🖱️ **Context menu** — Right-click any selection and choose "Save highlight to Recollect"
-- 📊 **Quick stats** — Popup shows how many highlights you've saved
-- 📁 **Organized** — Each save includes source URL, page title, timestamp, and domain
+- **Save highlights** — Select text and save directly to Recollect
+- **Markdown storage** — Highlights are saved as standard Markdown files.
+- **Keyboard shortcut** — `Alt+Shift+R` to save without leaving your flow
+- **Context menu** — Right-click any selection and choose "Save highlight to Recollect"
+- **Quick stats** — Popup shows how many highlights you've saved
+- **Organized** — Each save includes source URL, page title, timestamp, and domain
 
 ---
 
 ## Installation
+
+### Prerequisite
+
+A running Recollect server is required.
 
 ### From source (developer mode)
 
@@ -46,11 +52,28 @@ Works offline. No tracking. Your data stays on your machine.
 
 4. **Click "Load unpacked"** and select the `Recollect-Extension` folder
 
-5. The extension icon appears in your toolbar — pin it for easy access.
+5. The extension icon appears in your toolbar, pin it for easy access.
 
 ### From Chrome Web Store
 
 Coming soon once the developer account is set up.
+
+---
+
+## Architecture
+```
+Browser
+     │
+     ▼
+Extension
+     │
+     ▼
+Recollect Server
+     │
+     ▼
+Markdown Knowledge Base
+```
+
 
 ---
 
@@ -61,12 +84,17 @@ Coming soon once the developer account is set up.
 **Method 1 — Keyboard shortcut:**
 1. Select text on any webpage
 2. Press `Alt+Shift+R`
-3. A notification confirms the save
+3. A confirmation notification appears
 
 **Method 2 — Context menu:**
 1. Select text on any webpage
 2. Right-click → "Save highlight to Recollect"
 3. The content is saved to your Recollect server
+
+**Method 3 — Auto-Save (optional):**
+1. Enable "Auto-Save" in extension settings
+2. Select text on any webpage
+3. Highlighted text is automatically saved to Recollect
 
 ### View saved content
 
@@ -78,7 +106,7 @@ Click the extension icon to see:
 
 ---
 
-## File Format
+## Saved Format
 
 Each saved highlight is stored on your Recollect server as markdown:
 
@@ -122,7 +150,7 @@ Why the extension needs certain permissions:
 | `scripting` | Inject save logic into web pages |
 | `http://localhost/*` | Connect to your local Recollect server |
 
-No data is sent to third parties. Everything stays local.
+No data is sent to third parties. No browsing history is collected. Everything stays local.
 
 ---
 
@@ -143,7 +171,7 @@ No build step required — the extension uses vanilla JavaScript, HTML, and CSS.
 
 - **Chrome** (version 88+) or any Chromium-based browser (Edge, Brave, Opera)
 - **Recollect server** running at `http://localhost:5000` ([setup guide](https://github.com/sarox-dev/Recollect))
-
+- Firefox support is planned.
 ---
 
 ## License
@@ -156,10 +184,22 @@ Commercial licenses for proprietary use are available from the author.
 
 ---
 
+## Roadmap
+
+### Upcoming
+
+- Firefox support
+- Chrome Web Store release
+- Tags
+- Screenshots
+- Premium sync
+
+---
+
 ## Links
 
-- 🔌 **Recollect server**: [github.com/sarox-dev/Recollect](https://github.com/sarox-dev/Recollect)
 - 🌍 **Website**: [recollect.saroxtech.com](https://recollect.saroxtech.com)
+- 🔌 **Recollect server**: [github.com/sarox-dev/Recollect](https://github.com/sarox-dev/Recollect)
 - 💬 **Discord**: [Join the community](https://discord.gg/BXEDCJP7mT)
 
 [license-badge]: https://img.shields.io/badge/License-AGPL--3.0-blue?logo=gnu
