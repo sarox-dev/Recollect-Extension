@@ -1,7 +1,13 @@
 // content.js — Recollect Extension Content Script
 // Captures selection with surrounding context
 
-const CONTEXT_CHARS = 300;
+const CONTEXT_CHARS = 1500;
+
+// --- Sentinel for homepage detection ---
+const sentinel = document.createElement('meta');
+sentinel.name = 'recollect-extension';
+sentinel.content = 'installed';
+document.head.appendChild(sentinel);
 
 // --- Listen for background script requests ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -126,68 +132,76 @@ function showToast(message, isError) {
 let autoSaveTimer = null;
 
 document.addEventListener('mouseup', () => {
-  chrome.storage.sync.get(['autoSaveOnSelect'], (settings) => {
-    if (!settings.autoSaveOnSelect) return;
-    const text = window.getSelection().toString().trim();
-    if (text.length < 10) return; // too short, skip
+  try {
+    chrome.storage.sync.get(['autoSaveOnSelect'], (settings) => {
+      if (!settings.autoSaveOnSelect) return;
+      const text = window.getSelection().toString().trim();
+      if (text.length < 10) return;
 
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(() => {
-      const data = captureSelectionWithContext();
-      if (!data) return;
-      chrome.runtime.sendMessage({
-        action: 'saveHighlightWithContext',
-        text: data.content,
-        title: data.pageTitle,
-        url: data.pageUrl,
-        siteName: data.siteName,
-        beforeText: data.beforeText,
-        afterText: data.afterText,
-        selectionHtml: data.selectionHtml,
-        capturedAt: data.capturedAt
-      });
-    }, 600); // small debounce
-  });
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        const data = captureSelectionWithContext();
+        if (!data) return;
+        chrome.runtime.sendMessage({
+          action: 'saveHighlightWithContext',
+          text: data.content,
+          title: data.pageTitle,
+          url: data.pageUrl,
+          siteName: data.siteName,
+          beforeText: data.beforeText,
+          afterText: data.afterText,
+          selectionHtml: data.selectionHtml,
+          capturedAt: data.capturedAt
+        });
+      }, 600);
+    });
+  } catch (e) {
+    // storage API unavailable in this context (some restricted pages)
+  }
 });
 
 // --- Keyboard shortcut listener (from settings) ---
 document.addEventListener('keydown', (event) => {
-  chrome.storage.sync.get(['shortcutKey'], (settings) => {
-    const shortcut = settings.shortcutKey || 'Alt+Shift+R';
-    const parts = shortcut.split('+');
-    const key = parts.pop().toLowerCase();
-    const needsCtrl = parts.includes('Ctrl');
-    const needsAlt = parts.includes('Alt');
-    const needsShift = parts.includes('Shift');
-    const needsMeta = parts.includes('Meta');
+  try {
+    chrome.storage.sync.get(['shortcutKey'], (settings) => {
+      const shortcut = settings.shortcutKey || 'Alt+Shift+R';
+      const parts = shortcut.split('+');
+      const key = parts.pop().toLowerCase();
+      const needsCtrl = parts.includes('Ctrl');
+      const needsAlt = parts.includes('Alt');
+      const needsShift = parts.includes('Shift');
+      const needsMeta = parts.includes('Meta');
 
-    const ctrlOrCmd = event.ctrlKey || event.metaKey;
-    const matchCtrl = needsCtrl ? ctrlOrCmd : !ctrlOrCmd && !needsMeta;
-    const matchMeta = needsMeta ? event.metaKey : true;
-    const matchAlt = needsAlt ? event.altKey : !event.altKey;
-    const matchShift = needsShift ? event.shiftKey : !event.shiftKey;
-    const matchKey = event.key.toLowerCase() === key;
+      const ctrlOrCmd = event.ctrlKey || event.metaKey;
+      const matchCtrl = needsCtrl ? ctrlOrCmd : !ctrlOrCmd && !needsMeta;
+      const matchMeta = needsMeta ? event.metaKey : true;
+      const matchAlt = needsAlt ? event.altKey : !event.altKey;
+      const matchShift = needsShift ? event.shiftKey : !event.shiftKey;
+      const matchKey = event.key.toLowerCase() === key;
 
-    if (matchCtrl && matchAlt && matchShift && matchMeta && matchKey) {
-      event.preventDefault();
-      const text = window.getSelection().toString().trim();
-      if (!text) {
-        showToast('Select text first', true);
-        return;
+      if (matchCtrl && matchAlt && matchShift && matchMeta && matchKey) {
+        event.preventDefault();
+        const text = window.getSelection().toString().trim();
+        if (!text) {
+          showToast('Select text first', true);
+          return;
+        }
+        const data = captureSelectionWithContext();
+        if (!data) return;
+        chrome.runtime.sendMessage({
+          action: 'saveHighlightWithContext',
+          text: data.content,
+          title: data.pageTitle,
+          url: data.pageUrl,
+          siteName: data.siteName,
+          beforeText: data.beforeText,
+          afterText: data.afterText,
+          selectionHtml: data.selectionHtml,
+          capturedAt: data.capturedAt
+        });
       }
-      const data = captureSelectionWithContext();
-      if (!data) return;
-      chrome.runtime.sendMessage({
-        action: 'saveHighlightWithContext',
-        text: data.content,
-        title: data.pageTitle,
-        url: data.pageUrl,
-        siteName: data.siteName,
-        beforeText: data.beforeText,
-        afterText: data.afterText,
-        selectionHtml: data.selectionHtml,
-        capturedAt: data.capturedAt
-      });
-    }
-  });
+    });
+  } catch (e) {
+    // storage API unavailable in this context
+  }
 });

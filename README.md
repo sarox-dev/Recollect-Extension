@@ -1,44 +1,91 @@
-# Recollect Chrome Extension
+<h1 align="center">Recollect — Browser Extension</h1>
 
-Save highlighted text from websites as organized markdown files with metadata.
+<p align="center">
+  Save highlighted text from any webpage directly to your Recollect knowledge base.
+</p>
 
-## Installation
+<div align="center">
 
-1. Open `chrome://extensions`
-2. Enable `Developer mode` (toggle in top right)
-3. Click `Load unpacked`
-4. Select the `Recollect-Extension` folder
+[![License: AGPL-3.0][license-badge]][license-url]
+[![Version][version-badge]][extension-url]
+
+</div>
+
+---
+
+## What is this?
+
+The **Recollect browser extension** bridges your web browsing to your self-hosted Recollect server. Select text on any page, save it with a click — and it becomes instantly searchable in your personal knowledge base.
+
+Works offline. No tracking. Your data stays on your machine.
+
+---
 
 ## Features
 
-### Save Highlights
+- ✂️ **Save highlights** — Select text → save directly to Recollect
+- ⌨️ **Keyboard shortcut** — `Alt+Shift+R` to save without leaving your flow
+- 🖱️ **Context menu** — Right-click any selection and choose "Save highlight to Recollect"
+- 📊 **Quick stats** — Popup shows how many highlights you've saved
+- 📁 **Organized** — Each save includes source URL, page title, timestamp, and domain
 
-**Method 1: Context Menu**
-- Select text on any website
-- Right-click and choose "Save highlight to Recollect"
-- Choose where to save the markdown file
+---
 
-**Method 2: Keyboard Shortcut**
-- Select text anywhere on a website
-- Press `Ctrl+E` (or `Cmd+E` on Mac)
-- A notification confirms the save
+## Installation
 
-### Metadata Included
+### From source (developer mode)
 
-Each saved highlight is stored as a markdown file with YAML frontmatter containing:
-- Source URL and base domain
-- Page title
-- Date and timestamp
-- Author (extracted from domain)
-- The selected text
+1. **Download** the extension:
+   ```bash
+   git clone https://github.com/sarox-dev/Recollect-Extension.git
+   ```
 
-### File Format
+2. **Open Chrome** and go to `chrome://extensions`
 
-Files are saved as `.md` with the format:
+3. **Enable Developer mode** (toggle in top right)
+
+4. **Click "Load unpacked"** and select the `Recollect-Extension` folder
+
+5. The extension icon appears in your toolbar — pin it for easy access.
+
+### From Chrome Web Store
+
+Coming soon once the developer account is set up.
+
+---
+
+## Usage
+
+### Save a highlight
+
+**Method 1 — Keyboard shortcut:**
+1. Select text on any webpage
+2. Press `Alt+Shift+R`
+3. A notification confirms the save
+
+**Method 2 — Context menu:**
+1. Select text on any webpage
+2. Right-click → "Save highlight to Recollect"
+3. The content is saved to your Recollect server
+
+### View saved content
+
+The extension communicates with your local Recollect server at `http://localhost:5000`. Make sure the server is running (see [Recollect setup](https://github.com/sarox-dev/Recollect)).
+
+Click the extension icon to see:
+- Total highlights saved
+- Quick links to search your Recollect knowledge base
+
+---
+
+## File Format
+
+Each saved highlight is stored on your Recollect server as markdown:
+
 ```markdown
 ---
 title: "Page Title"
-source: https://example.com
+source: https://example.com/page
 author: example.com
 date: 2026-05-16
 baseUrl: https://example.com
@@ -48,12 +95,74 @@ timestamp: 2026-05-16T10:30:00.000Z
 Your highlighted text goes here...
 ```
 
-Files are saved to your Downloads folder by default with the naming pattern:
-`recollect-YYYY-MM-DD-page-title.md`
+Compatible with Obsidian, VS Code, and any markdown editor.
 
-## Usage Tips
+---
 
-- Files are compatible with Obsidian and other markdown editors
-- The popup shows how many highlights you've saved
-- Click "Open Downloads Folder" in the popup to access your files
-- All highlights are tracked locally in the extension's storage
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Alt+Shift+R` | Save selected text to Recollect |
+| Click extension icon | Open popup with stats |
+
+To customize shortcuts: `chrome://extensions/shortcuts`
+
+---
+
+## Permissions
+
+Why the extension needs certain permissions:
+
+| Permission | Why |
+|---|---|
+| `storage` | Track highlight count locally |
+| `activeTab` | Read selected text on current page |
+| `contextMenus` | Add right-click menu option |
+| `scripting` | Inject save logic into web pages |
+| `http://localhost/*` | Connect to your local Recollect server |
+
+No data is sent to third parties. Everything stays local.
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/sarox-dev/Recollect-Extension.git
+cd Recollect-Extension
+# Edit files directly
+# Load unpacked in Chrome to test
+```
+
+No build step required — the extension uses vanilla JavaScript, HTML, and CSS.
+
+---
+
+## Requirements
+
+- **Chrome** (version 88+) or any Chromium-based browser (Edge, Brave, Opera)
+- **Recollect server** running at `http://localhost:5000` ([setup guide](https://github.com/sarox-dev/Recollect))
+
+---
+
+## License
+
+**AGPL-3.0** — Copyright (c) 2026 Saroxtech / Valters
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3, or (at your option) any later version.
+
+Commercial licenses for proprietary use are available from the author.
+
+---
+
+## Links
+
+- 🔌 **Recollect server**: [github.com/sarox-dev/Recollect](https://github.com/sarox-dev/Recollect)
+- 🌍 **Website**: [recollect.saroxtech.com](https://recollect.saroxtech.com)
+- 💬 **Discord**: [Join the community](https://discord.gg/BXEDCJP7mT)
+
+[license-badge]: https://img.shields.io/badge/License-AGPL--3.0-blue?logo=gnu
+[license-url]: LICENSE
+[version-badge]: https://img.shields.io/badge/Version-1.1.0-orange
+[extension-url]: https://github.com/sarox-dev/Recollect-Extension

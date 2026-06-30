@@ -135,8 +135,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // --- Core API save function ---
 function saveToApi(text, tab, fullData) {
-  chrome.storage.sync.get(['apiUrl'], (settings) => {
+  chrome.storage.sync.get(['apiUrl', 'markdownPath'], (settings) => {
     const apiUrl = settings.apiUrl || DEFAULT_API_URL;
+    const markdownPath = settings.markdownPath || '';
     const now = new Date().toISOString();
 
     let siteName = '';
@@ -157,7 +158,8 @@ function saveToApi(text, tab, fullData) {
         before: fullData?.beforeText || '',
         after: fullData?.afterText || '',
         selection_html: fullData?.selectionHtml || ''
-      }
+      },
+      markdown_path: markdownPath
     };
 
     fetch(apiUrl, {

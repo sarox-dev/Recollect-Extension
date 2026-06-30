@@ -3,6 +3,7 @@
 const apiUrlInput = document.getElementById('apiUrl');
 const shortcutKeyInput = document.getElementById('shortcutKey');
 const autoSaveCheckbox = document.getElementById('autoSaveOnSelect');
+const markdownPathInput = document.getElementById('markdownPath');
 const saveBtn = document.getElementById('saveBtn');
 const saveStatus = document.getElementById('saveStatus');
 const testApiBtn = document.getElementById('testApiBtn');
@@ -12,10 +13,11 @@ const DEFAULT_API_URL = 'http://localhost:5000/api/capture';
 
 // --- Load settings ---
 function loadSettings() {
-  chrome.storage.sync.get(['apiUrl', 'shortcutKey', 'autoSaveOnSelect'], (settings) => {
+  chrome.storage.sync.get(['apiUrl', 'shortcutKey', 'autoSaveOnSelect', 'markdownPath'], (settings) => {
     apiUrlInput.value = settings.apiUrl || DEFAULT_API_URL;
     shortcutKeyInput.value = settings.shortcutKey || 'Alt+Shift+R';
     autoSaveCheckbox.checked = settings.autoSaveOnSelect || false;
+    markdownPathInput.value = settings.markdownPath || '';
   });
 }
 
@@ -24,11 +26,13 @@ function saveSettings() {
   const apiUrl = apiUrlInput.value.trim() || DEFAULT_API_URL;
   const shortcutKey = shortcutKeyInput.value.trim() || 'Alt+Shift+R';
   const autoSaveOnSelect = autoSaveCheckbox.checked;
+  const markdownPath = markdownPathInput.value.trim() || '';
 
   chrome.storage.sync.set({
     apiUrl,
     shortcutKey,
-    autoSaveOnSelect
+    autoSaveOnSelect,
+    markdownPath
   }, () => {
     saveStatus.textContent = 'Settings saved ✓';
     saveStatus.className = 'save-status';
