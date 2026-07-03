@@ -31,9 +31,21 @@
   "commands": {
     "save-selection": {
       "suggested_key": {
-        "default": "Alt+Shift+R"
+        "default": "Alt+Shift+S"
       },
       "description": "Save selected text to Recollect"
+    },
+    "save-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Save current page to Recollect"
+    },
+    "open-recollect": {
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
+      "description": "Open Recollect in new tab"
     }
   },
   "icons": {

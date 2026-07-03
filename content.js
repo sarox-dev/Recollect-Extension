@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'showToast') {
-    showToast(request.message, request.isError);
+    showGlow(request.message, request.isError);
   }
 });
 
@@ -50,7 +50,6 @@ function captureSelectionWithContext() {
     beforeText = fullText.substring(0, textOffset).slice(-CONTEXT_CHARS);
     afterText = fullText.substring(textOffset + text.length).slice(0, CONTEXT_CHARS);
   } else {
-    // Fallback: try to find it in parent's parent
     const parentFullText = (parentEl.parentElement?.textContent || '');
     const offset2 = parentFullText.indexOf(text);
     if (offset2 >= 0) {
@@ -62,7 +61,25 @@ function captureSelectionWithContext() {
   // Get selection HTML
   const selectionHtml = getSelectionHtml(sel, range);
 
-  // Determine site name
+  // Determine the HTML tag type of the selected element
+  let selectedTagName = '';
+  let selectedTagsAncestry = [];
+  try {
+    let node = range.startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    if (node) {
+      selectedTagName = node.tagName ? node.tagName.toLowerCase() : '';
+      let el = node;
+      while (el && el !== document.body) {
+        const tag = el.tagName ? el.tagName.toLowerCase() : '';
+        if (['h1','h2','h3','h4','h5','h6','p','li','blockquote','pre','code','td','th','dt','dd','figcaption'].includes(tag)) {
+          selectedTagsAncestry.push(tag);
+        }
+        el = el.parentElement;
+      }
+    }
+  } catch (e) {}
+
   let siteName = '';
   try {
     siteName = new URL(window.location.href).hostname.replace('www.', '');
@@ -76,7 +93,9 @@ function captureSelectionWithContext() {
     beforeText: beforeText,
     afterText: afterText,
     selectionHtml: selectionHtml,
-    capturedAt: new Date().toISOString()
+    capturedAt: new Date().toISOString(),
+    selectedTagName,
+    selectedTagsAncestry
   };
 }
 
@@ -92,40 +111,58 @@ function getSelectionHtml(sel, range) {
   }
 }
 
-// --- Toast notification ---
-function showToast(message, isError) {
-  // Remove existing toast if any
-  const existing = document.getElementById('recollect-toast');
+// --- Glowing notification ---
+function showGlow(message, isError) {
+  const existing = document.getElementById('recollect-glow');
   if (existing) existing.remove();
 
-  const toast = document.createElement('div');
-  toast.id = 'recollect-toast';
-  toast.textContent = message;
-  toast.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${isError ? '#ef4444' : '#10b981'};
-    color: white;
-    padding: 12px 18px;
-    border-radius: 8px;
-    z-index: 10000;
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-  `;
-  document.body.appendChild(toast);
+  chrome.storage.sync.get(['glowPosition'], (settings) => {
+    const position = settings.glowPosition || 'top-center';
+    const positions = {
+      'top-left': { top: '16px', left: '16px', transform: 'none' },
+      'top-center': { top: '16px', left: '50%', transform: 'translateX(-50%)' },
+      'top-right': { top: '16px', right: '16px', transform: 'none' },
+      'bottom-left': { bottom: '16px', left: '16px', transform: 'none' },
+      'bottom-center': { bottom: '16px', left: '50%', transform: 'translateX(-50%)' },
+      'bottom-right': { bottom: '16px', right: '16px', transform: 'none' },
+    };
+    const pos = positions[position] || positions['top-center'];
 
-  requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    const glow = document.createElement('div');
+    glow.id = 'recollect-glow';
+    glow.textContent = message;
+    Object.assign(glow.style, {
+      position: 'fixed',
+      zIndex: '2147483647',
+      padding: '10px 18px',
+      borderRadius: '10px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontSize: '14px',
+      fontWeight: '600',
+      pointerEvents: 'none',
+      opacity: '0',
+      transition: 'opacity 0.25s ease, box-shadow 0.25s ease',
+      background: isError ? '#dc2626' : '#059669',
+      color: '#fff',
+      boxShadow: isError
+        ? '0 0 20px rgba(220,38,38,0.6), 0 4px 12px rgba(0,0,0,0.2)'
+        : '0 0 20px rgba(5,150,105,0.6), 0 4px 12px rgba(0,0,0,0.2)',
+    });
+    if (pos.top) glow.style.top = pos.top;
+    if (pos.bottom) glow.style.bottom = pos.bottom;
+    if (pos.left) glow.style.left = pos.left;
+    if (pos.right) glow.style.right = pos.right;
+    glow.style.transform = pos.transform || 'none';
 
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 200);
-  }, 2000);
+    document.body.appendChild(glow);
+    requestAnimationFrame(() => { glow.style.opacity = '1'; });
+
+    setTimeout(() => {
+      glow.style.opacity = '0';
+      glow.style.boxShadow = 'none';
+      setTimeout(() => glow.remove(), 300);
+    }, 2000);
+  });
 }
 
 // --- Auto-save on selection (if enabled in settings) ---
@@ -155,12 +192,10 @@ document.addEventListener('mouseup', () => {
         });
       }, 600);
     });
-  } catch (e) {
-    // storage API unavailable in this context (some restricted pages)
-  }
+  } catch (e) {}
 });
 
-// --- Keyboard shortcut listener (from settings) ---
+// --- Keyboard shortcut listener ---
 document.addEventListener('keydown', (event) => {
   try {
     chrome.storage.sync.get(['shortcutKey'], (settings) => {
@@ -183,7 +218,7 @@ document.addEventListener('keydown', (event) => {
         event.preventDefault();
         const text = window.getSelection().toString().trim();
         if (!text) {
-          showToast('Select text first', true);
+          showGlow('Select text first', true);
           return;
         }
         const data = captureSelectionWithContext();
@@ -201,7 +236,5 @@ document.addEventListener('keydown', (event) => {
         });
       }
     });
-  } catch (e) {
-    // storage API unavailable in this context
-  }
+  } catch (e) {}
 });

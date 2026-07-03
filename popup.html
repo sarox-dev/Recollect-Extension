@@ -12,32 +12,36 @@
       <img class="logo" src="recollect-logo.png" alt="Recollect logo" />
       <div>
         <h1>Recollect</h1>
-        <p class="subtitle">Save what matters</p>
       </div>
     </header>
+
+    <div class="project-row">
+      <select id="projectSelect" class="project-select">
+        <option value="">— None —</option>
+      </select>
+      <button id="newProjectBtn" class="btn-icon-only" title="New project">+</button>
+    </div>
 
     <div class="actions">
       <button id="saveSelectionBtn" class="btn btn-primary">
         <span class="btn-icon">✧</span>
-        Save current selection
+        <span>Save selection</span>
+        <span id="shortcut-save-selection" class="shortcut-hint"></span>
       </button>
       <button id="savePageBtn" class="btn btn-secondary">
         <span class="btn-icon">◧</span>
-        Save current page
+        <span>Save page</span>
+        <span id="shortcut-save-page" class="shortcut-hint"></span>
       </button>
       <button id="openRecollectBtn" class="btn btn-outline">
         <span class="btn-icon">↗</span>
-        Open Recollect
+        <span>Open Recollect</span>
+        <span id="shortcut-open-recollect" class="shortcut-hint"></span>
       </button>
     </div>
 
-    <div class="status-bar">
-      <span id="statusMessage">Ready</span>
+    <div class="settings-row">
       <button id="settingsBtn" class="btn-icon-only" title="Settings">⚙</button>
-    </div>
-
-    <div class="stats">
-      <p>Saved: <strong id="savedCount">0</strong></p>
     </div>
   </div>
 

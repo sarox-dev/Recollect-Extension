@@ -38,9 +38,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'save-highlight' && info.selectionText) {
     chrome.tabs.sendMessage(tab.id, { action: 'captureWithContext' }, (response) => {
-      if (chrome.runtime.lastError) {
-        saveToApi(info.selectionText, tab);
-      } else if (response && response.fullData) {
+      if (response && response.fullData) {
         saveToApi(response.fullData.content, tab, response.fullData);
       } else {
         saveToApi(info.selectionText, tab);
@@ -53,18 +51,26 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'save-selection') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'captureWithContext' }, (response) => {
-          if (chrome.runtime.lastError || !response) {
-            chrome.tabs.sendMessage(tabs[0].id, { action: 'getSelection' }, (r2) => {
-              if (r2 && r2.text) saveToApi(r2.text, tabs[0]);
-            });
-          } else if (response.fullData) {
-            saveToApi(response.fullData.content, tabs[0], response.fullData);
-          }
-        });
-      }
+      if (!tabs[0]) return;
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'captureWithContext' }, (response) => {
+        if (response && response.fullData) {
+          saveToApi(response.fullData.content, tabs[0], response.fullData);
+        } else {
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'getSelection' }, (r2) => {
+            if (r2 && r2.text) saveToApi(r2.text, tabs[0]);
+          });
+        }
+      });
     });
+  }
+  if (command === 'save-page') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) return;
+      savePage(tabs[0]);
+    });
+  }
+  if (command === 'open-recollect') {
+    chrome.tabs.create({ url: 'http://localhost:5000' });
   }
 });
 
@@ -106,6 +112,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         beforeText: request.beforeText,
         afterText: request.afterText,
         selectionHtml: request.selectionHtml,
+        selectedTagName: request.selectedTagName,
+        selectedTagsAncestry: request.selectedTagsAncestry,
         capturedAt: new Date().toISOString()
       });
       sendResponse({ success: true });
@@ -135,15 +143,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // --- Core API save function ---
 function saveToApi(text, tab, fullData) {
-  chrome.storage.sync.get(['apiUrl', 'markdownPath'], (settings) => {
+  chrome.storage.sync.get(['apiUrl', 'defaultProject'], (settings) => {
     const apiUrl = settings.apiUrl || DEFAULT_API_URL;
-    const markdownPath = settings.markdownPath || '';
     const now = new Date().toISOString();
-
-    let siteName = '';
-    try {
-      siteName = new URL(tab.url).hostname.replace('www.', '');
-    } catch (e) {}
+    const siteName = (() => { try { return new URL(tab.url).hostname.replace('www.', ''); } catch(e) { return ''; } })();
 
     const payload = {
       type: 'snippet',
@@ -157,9 +160,11 @@ function saveToApi(text, tab, fullData) {
       context: {
         before: fullData?.beforeText || '',
         after: fullData?.afterText || '',
-        selection_html: fullData?.selectionHtml || ''
+        selection_html: fullData?.selectionHtml || '',
+        selected_tag: fullData?.selectedTagName || '',
+        tag_ancestry: (fullData?.selectedTagsAncestry || []).join('/')
       },
-      markdown_path: markdownPath
+      project: settings.defaultProject || ''
     };
 
     fetch(apiUrl, {
