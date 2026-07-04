@@ -1,5 +1,7 @@
-// content.js — Recollect Extension Content Script
-// Captures selection with surrounding context
+// content.js — Recollect Extension Content Script (Fāze 1)
+// Collects full page data for Capture Package
+// - Page HTML, metadata (OG, Twitter, Schema.org)
+// - Selection anchor with CSS selector, XPath, context
 
 const CONTEXT_CHARS = 1500;
 
@@ -16,9 +18,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ text: selectedText });
   }
 
-  if (request.action === 'captureWithContext') {
-    const fullData = captureSelectionWithContext();
-    sendResponse({ fullData });
+  if (request.action === 'buildCapturePackage') {
+    const captureType = request.captureType || 'page';
+    const package = buildCapturePackage(captureType);
+    sendResponse({ package });
   }
 
   if (request.action === 'showToast') {
@@ -26,23 +29,137 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// --- Captures selection with context ---
-function captureSelectionWithContext() {
+// --- Build complete Capture Package ---
+function buildCapturePackage(captureType) {
   const sel = window.getSelection();
+  const hasSelection = sel.toString().trim().length > 0;
+
+  const anchor = hasSelection ? buildAnchor(sel) : null;
+  const metadata = extractPageMetadata();
+
+  return {
+    version: '1.0',
+    capture_type: captureType,
+    source: {
+      url: window.location.href,
+      title: document.title,
+      site_name: extractSiteName(),
+      extension_version: chrome.runtime.getManifest().version,
+      browser: navigator.userAgent
+    },
+    page_metadata: metadata,
+    anchor: anchor,
+    tags: [],
+    project: '',
+    page_html: captureType === 'page' || captureType === 'article'
+      ? document.documentElement.outerHTML
+      : null
+  };
+}
+
+// --- Extract all page metadata ---
+function extractPageMetadata() {
+  const getMeta = (name) => {
+    const el = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`);
+    return el ? el.getAttribute('content') || '' : '';
+  };
+
+  // Open Graph
+  const og = {};
+  document.querySelectorAll('meta[property^="og:"]').forEach(el => {
+    const key = el.getAttribute('property').replace('og:', '');
+    og[key] = el.getAttribute('content') || '';
+  });
+
+  // Twitter Card
+  const twitter = {};
+  document.querySelectorAll('meta[name^="twitter:"]').forEach(el => {
+    const key = el.getAttribute('name').replace('twitter:', '');
+    twitter[key] = el.getAttribute('content') || '';
+  });
+
+  // Schema.org (JSON-LD)
+  const schemaOrg = [];
+  document.querySelectorAll('script[type="application/ld+json"]').forEach(el => {
+    try {
+      schemaOrg.push(JSON.parse(el.textContent));
+    } catch (e) {}
+  });
+
+  // Canonical
+  const canonicalLink = document.querySelector('link[rel="canonical"]');
+  const canonical = canonicalLink ? canonicalLink.getAttribute('href') : '';
+
+  // Language
+  const language = document.documentElement.getAttribute('lang') || '';
+
+  // Charset
+  const charsetMeta = document.querySelector('meta[charset]');
+  const charset = charsetMeta ? charsetMeta.getAttribute('charset') : '';
+
+  // Favicon
+  const faviconLink = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+  const favicon = faviconLink ? faviconLink.getAttribute('href') : '';
+
+  return {
+    canonical: canonical || null,
+    language: language || null,
+    charset: charset || null,
+    favicon: favicon || null,
+    open_graph: Object.keys(og).length > 0 ? og : null,
+    twitter_card: Object.keys(twitter).length > 0 ? twitter : null,
+    schema_org: schemaOrg.length > 0 ? schemaOrg : null
+  };
+}
+
+// --- Extract site name from URL ---
+function extractSiteName() {
+  try {
+    // Try OG first
+    const ogSite = document.querySelector('meta[property="og:site_name"]');
+    if (ogSite) return ogSite.getAttribute('content') || '';
+    // Fallback to hostname
+    return new URL(window.location.href).hostname.replace('www.', '');
+  } catch (e) {
+    return '';
+  }
+}
+
+// --- Build anchor object from selection ---
+function buildAnchor(sel) {
   const text = sel.toString().trim();
   if (!text) return null;
 
   const range = sel.getRangeAt(0);
   const container = range.commonAncestorContainer;
-
-  // Get surrounding text from the parent element
   const parentEl = container.nodeType === Node.TEXT_NODE
     ? container.parentElement
     : container;
 
+  // CSS selector
+  const cssSelector = buildCssSelector(parentEl);
+
+  // XPath
+  const xpath = buildXPath(parentEl);
+
+  // Selection HTML
+  const selectionHtml = getSelectionHtml(sel, range);
+
+  // Tag ancestry
+  const tagAncestry = [];
+  let el = parentEl;
+  const semanticTags = ['h1','h2','h3','h4','h5','h6','p','li','blockquote','pre','code','td','th','dt','dd','figcaption','article','section','main'];
+  while (el && el !== document.body) {
+    const tag = el.tagName ? el.tagName.toLowerCase() : '';
+    if (semanticTags.includes(tag)) {
+      tagAncestry.push(tag);
+    }
+    el = el.parentElement;
+  }
+
+  // Before/after context
   const fullText = parentEl.textContent || '';
   const textOffset = fullText.indexOf(text);
-
   let beforeText = '';
   let afterText = '';
 
@@ -58,45 +175,85 @@ function captureSelectionWithContext() {
     }
   }
 
-  // Get selection HTML
-  const selectionHtml = getSelectionHtml(sel, range);
-
-  // Determine the HTML tag type of the selected element
-  let selectedTagName = '';
-  let selectedTagsAncestry = [];
+  // Selected tag name
+  let selectedTag = '';
   try {
     let node = range.startContainer;
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-    if (node) {
-      selectedTagName = node.tagName ? node.tagName.toLowerCase() : '';
-      let el = node;
-      while (el && el !== document.body) {
-        const tag = el.tagName ? el.tagName.toLowerCase() : '';
-        if (['h1','h2','h3','h4','h5','h6','p','li','blockquote','pre','code','td','th','dt','dd','figcaption'].includes(tag)) {
-          selectedTagsAncestry.push(tag);
-        }
-        el = el.parentElement;
-      }
-    }
-  } catch (e) {}
-
-  let siteName = '';
-  try {
-    siteName = new URL(window.location.href).hostname.replace('www.', '');
+    if (node) selectedTag = node.tagName ? node.tagName.toLowerCase() : '';
   } catch (e) {}
 
   return {
-    content: text,
-    pageTitle: document.title,
-    pageUrl: window.location.href,
-    siteName: siteName,
-    beforeText: beforeText,
-    afterText: afterText,
-    selectionHtml: selectionHtml,
-    capturedAt: new Date().toISOString(),
-    selectedTagName,
-    selectedTagsAncestry
+    selected_text: text,
+    css_selector: cssSelector,
+    xpath: xpath,
+    selection_html: selectionHtml,
+    tag_ancestry: tagAncestry,
+    selected_tag: selectedTag,
+    before_text: beforeText || null,
+    after_text: afterText || null
   };
+}
+
+// --- Build unique CSS selector for an element ---
+function buildCssSelector(el) {
+  if (!el || el === document.body) return 'body';
+  if (el.id) return `#${el.id}`;
+
+  const path = [];
+  let current = el;
+  while (current && current !== document.body) {
+    let selector = current.tagName.toLowerCase();
+    if (current.id) {
+      selector = `#${current.id}`;
+      path.unshift(selector);
+      break;
+    }
+    if (current.className && typeof current.className === 'string') {
+      const classes = current.className.trim().split(/\s+/).filter(c => c.length > 0).slice(0, 2);
+      if (classes.length > 0) {
+        selector += '.' + classes.join('.');
+      }
+    }
+    // Add nth-child for uniqueness
+    const parent = current.parentElement;
+    if (parent) {
+      const siblings = Array.from(parent.children).filter(
+        s => s.tagName === current.tagName
+      );
+      if (siblings.length > 1) {
+        const index = siblings.indexOf(current) + 1;
+        selector += `:nth-child(${index})`;
+      }
+    }
+    path.unshift(selector);
+    current = current.parentElement;
+  }
+  return path.join(' > ');
+}
+
+// --- Build XPath for an element ---
+function buildXPath(el) {
+  if (!el || el === document.body) return '/html/body';
+  if (el.id) return `//*[@id="${el.id}"]`;
+
+  const parts = [];
+  let current = el;
+  while (current && current !== document.documentElement) {
+    let index = 1;
+    const sibling = current.previousElementSibling;
+    if (sibling) {
+      // Count preceding siblings with same tag
+      let sib = sibling;
+      while (sib) {
+        if (sib.tagName === current.tagName) index++;
+        sib = sib.previousElementSibling;
+      }
+    }
+    parts.unshift(`${current.tagName.toLowerCase()}[${index}]`);
+    current = current.parentElement;
+  }
+  return '/html/' + parts.join('/');
 }
 
 // --- Extract HTML of the selection ---
@@ -165,7 +322,7 @@ function showGlow(message, isError) {
   });
 }
 
-// --- Auto-save on selection (if enabled in settings) ---
+// --- Auto-save on selection (if enabled) ---
 let autoSaveTimer = null;
 
 document.addEventListener('mouseup', () => {
@@ -177,18 +334,11 @@ document.addEventListener('mouseup', () => {
 
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(() => {
-        const data = captureSelectionWithContext();
-        if (!data) return;
+        const pkg = buildCapturePackage('snippet');
+        if (!pkg || !pkg.anchor) return;
         chrome.runtime.sendMessage({
-          action: 'saveHighlightWithContext',
-          text: data.content,
-          title: data.pageTitle,
-          url: data.pageUrl,
-          siteName: data.siteName,
-          beforeText: data.beforeText,
-          afterText: data.afterText,
-          selectionHtml: data.selectionHtml,
-          capturedAt: data.capturedAt
+          action: 'saveCapturePackage',
+          package: pkg
         });
       }, 600);
     });
@@ -221,18 +371,10 @@ document.addEventListener('keydown', (event) => {
           showGlow('Select text first', true);
           return;
         }
-        const data = captureSelectionWithContext();
-        if (!data) return;
+        const pkg = buildCapturePackage('snippet');
         chrome.runtime.sendMessage({
-          action: 'saveHighlightWithContext',
-          text: data.content,
-          title: data.pageTitle,
-          url: data.pageUrl,
-          siteName: data.siteName,
-          beforeText: data.beforeText,
-          afterText: data.afterText,
-          selectionHtml: data.selectionHtml,
-          capturedAt: data.capturedAt
+          action: 'saveCapturePackage',
+          package: pkg
         });
       }
     });

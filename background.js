@@ -1,5 +1,5 @@
-// background.js — Recollect Extension Service Worker
-// Sends captured content to local Recollect Core API
+// background.js — Recollect Extension Service Worker (Fāze 1)
+// Sends Capture Package to Recollect Core API
 
 const DEFAULT_API_URL = 'http://localhost:5000/api/capture';
 
@@ -8,8 +8,13 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'save-highlight',
-      title: 'Save to Recollect',
+      title: 'Save selection to Recollect',
       contexts: ['selection']
+    });
+    chrome.contextMenus.create({
+      id: 'save-page',
+      title: 'Save page to Recollect',
+      contexts: ['page']
     });
   });
   // Set defaults if first install
@@ -28,8 +33,13 @@ chrome.runtime.onStartup.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'save-highlight',
-      title: 'Save to Recollect',
+      title: 'Save selection to Recollect',
       contexts: ['selection']
+    });
+    chrome.contextMenus.create({
+      id: 'save-page',
+      title: 'Save page to Recollect',
+      contexts: ['page']
     });
   });
 });
@@ -37,27 +47,37 @@ chrome.runtime.onStartup.addListener(() => {
 // --- Context Menu ---
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'save-highlight' && info.selectionText) {
-    chrome.tabs.sendMessage(tab.id, { action: 'captureWithContext' }, (response) => {
-      if (response && response.fullData) {
-        saveToApi(response.fullData.content, tab, response.fullData);
+    chrome.tabs.sendMessage(tab.id, { action: 'buildCapturePackage', captureType: 'snippet' }, (response) => {
+      if (response && response.package) {
+        sendCapturePackage(response.package, tab.id);
       } else {
-        saveToApi(info.selectionText, tab);
+        // Fallback: basic text-only capture
+        sendBasicCapture(tab, info.selectionText);
+      }
+    });
+  }
+  if (info.menuItemId === 'save-page') {
+    chrome.tabs.sendMessage(tab.id, { action: 'buildCapturePackage', captureType: 'page' }, (response) => {
+      if (response && response.package) {
+        sendCapturePackage(response.package, tab.id);
+      } else {
+        sendBasicCapture(tab, '');
       }
     });
   }
 });
 
-// --- Keyboard Command (from manifest) ---
+// --- Keyboard Command ---
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'save-selection') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) return;
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'captureWithContext' }, (response) => {
-        if (response && response.fullData) {
-          saveToApi(response.fullData.content, tabs[0], response.fullData);
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'buildCapturePackage', captureType: 'snippet' }, (response) => {
+        if (response && response.package) {
+          sendCapturePackage(response.package, tabs[0].id);
         } else {
           chrome.tabs.sendMessage(tabs[0].id, { action: 'getSelection' }, (r2) => {
-            if (r2 && r2.text) saveToApi(r2.text, tabs[0]);
+            if (r2 && r2.text) sendBasicCapture(tabs[0], r2.text);
           });
         }
       });
@@ -66,7 +86,11 @@ chrome.commands.onCommand.addListener((command) => {
   if (command === 'save-page') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) return;
-      savePage(tabs[0]);
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'buildCapturePackage', captureType: 'page' }, (response) => {
+        if (response && response.package) {
+          sendCapturePackage(response.package, tabs[0].id);
+        }
+      });
     });
   }
   if (command === 'open-recollect') {
@@ -74,29 +98,12 @@ chrome.commands.onCommand.addListener((command) => {
   }
 });
 
-// --- Single unified message handler ---
+// --- Message handler ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // From content.js — save with full context
-  if (request.action === 'saveHighlightWithContext') {
-    const tab = { title: request.title, url: request.url, id: sender.tab?.id };
-    saveToApi(request.text, tab, {
-      content: request.text,
-      pageTitle: request.title,
-      pageUrl: request.url,
-      siteName: request.siteName,
-      beforeText: request.beforeText,
-      afterText: request.afterText,
-      selectionHtml: request.selectionHtml,
-      capturedAt: request.capturedAt
-    });
-    sendResponse({ success: true });
-    return true;
-  }
-
-  // Simple save (fallback)
-  if (request.action === 'saveToApi') {
-    const tab = { title: request.title, url: request.url };
-    saveToApi(request.text, tab);
+  // From content.js — save Capture Package
+  if (request.action === 'saveCapturePackage' && request.package) {
+    const tabId = sender.tab?.id;
+    sendCapturePackage(request.package, tabId);
     sendResponse({ success: true });
     return true;
   }
@@ -104,17 +111,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // From popup — save current selection
   if (request.action === 'saveCurrentSelection') {
     if (request.text) {
-      saveToApi(request.text, request.tab, {
-        content: request.text,
-        pageTitle: request.tab?.title,
-        pageUrl: request.tab?.url,
-        siteName: request.siteName,
-        beforeText: request.beforeText,
-        afterText: request.afterText,
-        selectionHtml: request.selectionHtml,
-        selectedTagName: request.selectedTagName,
-        selectedTagsAncestry: request.selectedTagsAncestry,
-        capturedAt: new Date().toISOString()
+      chrome.tabs.sendMessage(sender.tab?.id || request.tab?.id, {
+        action: 'buildCapturePackage',
+        captureType: 'snippet'
+      }, (response) => {
+        if (response && response.package) {
+          sendCapturePackage(response.package, sender.tab?.id || request.tab?.id);
+        } else {
+          sendBasicCapture(request.tab, request.text);
+        }
       });
       sendResponse({ success: true });
     } else {
@@ -125,11 +130,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // From popup — save current page
   if (request.action === 'saveCurrentPage') {
-    savePage(sender.tab || request.tab, sendResponse);
+    const tab = sender.tab || request.tab;
+    if (tab && tab.id) {
+      chrome.tabs.sendMessage(tab.id, { action: 'buildCapturePackage', captureType: 'page' }, (response) => {
+        if (response && response.package) {
+          sendCapturePackage(response.package, tab.id);
+        }
+      });
+    }
+    sendResponse({ success: true });
     return true;
   }
 
-  // From popup — open Recollect in new tab
+  // From popup — open Recollect
   if (request.action === 'openRecollect') {
     chrome.storage.sync.get(['apiUrl'], (s) => {
       const baseUrl = s.apiUrl || DEFAULT_API_URL;
@@ -141,31 +154,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// --- Core API save function ---
-function saveToApi(text, tab, fullData) {
-  chrome.storage.sync.get(['apiUrl', 'defaultProject', 'apiToken'], (settings) => {
+// --- Send Capture Package to API ---
+function sendCapturePackage(pkg, tabId) {
+  chrome.storage.sync.get(['apiUrl', 'apiToken'], (settings) => {
     const apiUrl = settings.apiUrl || DEFAULT_API_URL;
-    const now = new Date().toISOString();
-    const siteName = (() => { try { return new URL(tab.url).hostname.replace('www.', ''); } catch(e) { return ''; } })();
-
-    const payload = {
-      type: 'snippet',
-      content: text,
-      source: {
-        url: tab.url || '',
-        title: tab.title || '',
-        site_name: fullData?.siteName || siteName,
-        captured_at: fullData?.capturedAt || now
-      },
-      context: {
-        before: fullData?.beforeText || '',
-        after: fullData?.afterText || '',
-        selection_html: fullData?.selectionHtml || '',
-        selected_tag: fullData?.selectedTagName || '',
-        tag_ancestry: (fullData?.selectedTagsAncestry || []).join('/')
-      },
-      project: settings.defaultProject || ''
-    };
 
     const headers = { 'Content-Type': 'application/json' };
     if (settings.apiToken) {
@@ -175,83 +167,63 @@ function saveToApi(text, tab, fullData) {
     fetch(apiUrl, {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(pkg)
     })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
+        // Store in local history
         chrome.storage.local.get({ highlights: [] }, (result) => {
           const entry = {
             id: data.id,
-            title: payload.source.title,
-            url: payload.source.url,
+            type: pkg.capture_type || 'page',
+            title: pkg.source?.title || '',
+            url: pkg.source?.url || '',
             date: new Date().toISOString().split('T')[0],
-            text: text.substring(0, 100)
+            text: pkg.anchor?.selected_text?.substring(0, 100) || ''
           };
           const highlights = [entry, ...result.highlights].slice(0, 100);
           chrome.storage.local.set({ highlights });
         });
-        if (tab.id) {
-          chrome.tabs.sendMessage(tab.id, { action: 'showToast', message: 'Saved to Recollect' }).catch(() => {});
-        }
+        showToast(tabId, 'Saved to Recollect', false);
         console.log('Recollect: saved', data.id);
       } else {
         console.error('Recollect API error:', data);
-        notifyFailure(tab.id, 'Save failed');
+        showToast(tabId, 'Save failed', true);
       }
     })
     .catch(err => {
       console.error('Recollect API unavailable:', err);
-      notifyFailure(tab.id, 'Recollect server unavailable');
+      showToast(tabId, 'Recollect server unavailable', true);
     });
   });
 }
 
-function notifyFailure(tabId, msg) {
+// --- Fallback: basic text-only capture ---
+function sendBasicCapture(tab, text) {
+  const now = new Date().toISOString();
+  let siteName = '';
+  try { siteName = new URL(tab.url).hostname.replace('www.', ''); } catch (e) {}
+
+  const pkg = {
+    version: '1.0',
+    capture_type: 'snippet',
+    source: {
+      url: tab.url || '',
+      title: tab.title || '',
+      site_name: siteName
+    },
+    anchor: {
+      selected_text: text || null
+    },
+    tags: [],
+    project: ''
+  };
+  sendCapturePackage(pkg, tab.id);
+}
+
+function showToast(tabId, msg, isError) {
   if (tabId) {
-    chrome.tabs.sendMessage(tabId, { action: 'showToast', message: msg, isError: true }).catch(() => {});
+    chrome.tabs.sendMessage(tabId, { action: 'showToast', message: msg, isError }).catch(() => {});
   }
-}
-
-// --- Save current page ---
-function savePage(tab, sendResponse) {
-  chrome.storage.sync.get(['apiUrl', 'apiToken'], (settings) => {
-    const apiUrl = settings.apiUrl || DEFAULT_API_URL;
-    const now = new Date().toISOString();
-
-    let siteName = '';
-    try { siteName = new URL(tab.url).hostname.replace('www.', ''); } catch (e) {}
-
-    const payload = {
-      type: 'page',
-      content: '',
-      source: {
-        url: tab.url || '',
-        title: tab.title || '',
-        site_name: siteName,
-        captured_at: now
-      },
-      context: { before: '', after: '', selection_html: '' }
-    };
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (settings.apiToken) {
-      headers['Authorization'] = 'Bearer ' + settings.apiToken;
-    }
-
-    fetch(apiUrl, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (sendResponse) sendResponse({ success: true, id: data.id, message: 'Page saved' });
-    })
-    .catch(err => {
-      console.error('Recollect API unavailable:', err);
-      if (sendResponse) sendResponse({ success: false, message: 'Recollect server unavailable' });
-    });
-  });
-  return true;
 }
