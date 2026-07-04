@@ -63,6 +63,11 @@
         <p class="hint">The URL where Recollect Core receives captured content. Default: http://localhost:5000/api/capture</p>
       </div>
       <div class="field">
+        <label for="apiToken">API Token</label>
+        <input type="text" id="apiToken" placeholder="Paste your JWT token here" />
+        <p class="hint">Required only when Recollect is on a <strong>remote server</strong> (not localhost). If running locally, log in to the Web UI first and the session cookie is used automatically. Get token: Web UI sidebar → <strong>Copy API Token</strong>.</p>
+      </div>
+      <div class="field">
         <button id="testApiBtn" class="btn btn-secondary">Test Connection</button>
         <span id="testResult" class="test-result"></span>
       </div>

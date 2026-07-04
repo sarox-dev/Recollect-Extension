@@ -1,6 +1,7 @@
 // options.js — Recollect Extension Settings
 
 const apiUrlInput = document.getElementById('apiUrl');
+const apiTokenInput = document.getElementById('apiToken');
 const themeToggle = document.getElementById('themeToggle');
 const glowPosition = document.getElementById('glowPosition');
 const saveBtn = document.getElementById('saveBtn');
@@ -12,8 +13,9 @@ const DEFAULT_API_URL = 'http://localhost:5000/api/capture';
 
 // --- Load settings ---
 function loadSettings() {
-  chrome.storage.sync.get(['apiUrl', 'shortcutKey', 'theme', 'glowPosition'], (settings) => {
+  chrome.storage.sync.get(['apiUrl', 'shortcutKey', 'theme', 'glowPosition', 'apiToken'], (settings) => {
     apiUrlInput.value = settings.apiUrl || DEFAULT_API_URL;
+    if (apiTokenInput) apiTokenInput.value = settings.apiToken || '';
     
     glowPosition.value = settings.glowPosition || 'top-center';
     applyTheme(settings.theme);
@@ -23,12 +25,14 @@ function loadSettings() {
 // --- Save settings ---
 function saveSettings() {
   const apiUrl = apiUrlInput.value.trim() || DEFAULT_API_URL;
-  
-  const theme = themeToggle.checked ? 'dark' : '';
-  const glowPos = glowPosition.value;
+    const apiToken = apiTokenInput ? apiTokenInput.value.trim() : '';
 
-  chrome.storage.sync.set({
-    apiUrl,
+    const theme = themeToggle.checked ? 'dark' : '';
+    const glowPos = glowPosition.value;
+
+    chrome.storage.sync.set({
+      apiUrl,
+      apiToken,
     theme,
     glowPosition: glowPos
   }, () => {

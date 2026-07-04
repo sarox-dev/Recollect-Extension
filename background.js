@@ -143,7 +143,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // --- Core API save function ---
 function saveToApi(text, tab, fullData) {
-  chrome.storage.sync.get(['apiUrl', 'defaultProject'], (settings) => {
+  chrome.storage.sync.get(['apiUrl', 'defaultProject', 'apiToken'], (settings) => {
     const apiUrl = settings.apiUrl || DEFAULT_API_URL;
     const now = new Date().toISOString();
     const siteName = (() => { try { return new URL(tab.url).hostname.replace('www.', ''); } catch(e) { return ''; } })();
@@ -167,9 +167,14 @@ function saveToApi(text, tab, fullData) {
       project: settings.defaultProject || ''
     };
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (settings.apiToken) {
+      headers['Authorization'] = 'Bearer ' + settings.apiToken;
+    }
+
     fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(payload)
     })
     .then(res => res.json())
@@ -210,7 +215,7 @@ function notifyFailure(tabId, msg) {
 
 // --- Save current page ---
 function savePage(tab, sendResponse) {
-  chrome.storage.sync.get(['apiUrl'], (settings) => {
+  chrome.storage.sync.get(['apiUrl', 'apiToken'], (settings) => {
     const apiUrl = settings.apiUrl || DEFAULT_API_URL;
     const now = new Date().toISOString();
 
@@ -229,9 +234,14 @@ function savePage(tab, sendResponse) {
       context: { before: '', after: '', selection_html: '' }
     };
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (settings.apiToken) {
+      headers['Authorization'] = 'Bearer ' + settings.apiToken;
+    }
+
     fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(payload)
     })
     .then(res => res.json())
