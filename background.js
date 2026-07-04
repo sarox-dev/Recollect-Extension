@@ -1,20 +1,29 @@
-// background.js — Recollect Extension Service Worker (Fāze 1)
+// background.js — Recollect Extension Service Worker (Fāze 1 + Layout)
 // Sends Capture Package to Recollect Core API
+// Supports Capture Layout — domain-specific capture types
 
 const DEFAULT_API_URL = 'http://localhost:5000/api/capture';
 
 // --- Initialization ---
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
+    // Selection context — always
     chrome.contextMenus.create({
-      id: 'save-highlight',
+      id: 'save-selection',
       title: 'Save selection to Recollect',
       contexts: ['selection']
     });
+    // Page context — basic
     chrome.contextMenus.create({
       id: 'save-page',
       title: 'Save page to Recollect',
       contexts: ['page']
+    });
+    // Link context
+    chrome.contextMenus.create({
+      id: 'save-link',
+      title: 'Save link to Recollect',
+      contexts: ['link']
     });
   });
   // Set defaults if first install
@@ -31,28 +40,20 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: 'save-highlight',
-      title: 'Save selection to Recollect',
-      contexts: ['selection']
-    });
-    chrome.contextMenus.create({
-      id: 'save-page',
-      title: 'Save page to Recollect',
-      contexts: ['page']
-    });
+    chrome.contextMenus.create({ id: 'save-selection', title: 'Save selection to Recollect', contexts: ['selection'] });
+    chrome.contextMenus.create({ id: 'save-page', title: 'Save page to Recollect', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'save-link', title: 'Save link to Recollect', contexts: ['link'] });
   });
 });
 
 // --- Context Menu ---
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === 'save-highlight' && info.selectionText) {
+  if (info.menuItemId === 'save-selection' && info.selectionText) {
     chrome.tabs.sendMessage(tab.id, { action: 'buildCapturePackage', captureType: 'snippet' }, (response) => {
       if (response && response.package) {
         sendCapturePackage(response.package, tab.id);
       } else {
-        // Fallback: basic text-only capture
-        sendBasicCapture(tab, info.selectionText);
+        sendBasicCapture(tab, info.selectionText, 'snippet');
       }
     });
   }
@@ -61,13 +62,17 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       if (response && response.package) {
         sendCapturePackage(response.package, tab.id);
       } else {
-        sendBasicCapture(tab, '');
+        sendBasicCapture(tab, '', 'page');
       }
     });
   }
+  if (info.menuItemId === 'save-link' && info.linkUrl) {
+    // Link save — create a basic capture from the link info
+    sendBasicCapture(tab, info.linkUrl, 'link');
+  }
 });
 
-// --- Keyboard Command ---
+// --- Keyboard Commands ---
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'save-selection') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -77,7 +82,7 @@ chrome.commands.onCommand.addListener((command) => {
           sendCapturePackage(response.package, tabs[0].id);
         } else {
           chrome.tabs.sendMessage(tabs[0].id, { action: 'getSelection' }, (r2) => {
-            if (r2 && r2.text) sendBasicCapture(tabs[0], r2.text);
+            if (r2 && r2.text) sendBasicCapture(tabs[0], r2.text, 'snippet');
           });
         }
       });
@@ -118,7 +123,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (response && response.package) {
           sendCapturePackage(response.package, sender.tab?.id || request.tab?.id);
         } else {
-          sendBasicCapture(request.tab, request.text);
+          sendBasicCapture(request.tab, request.text, 'snippet');
         }
       });
       sendResponse({ success: true });
@@ -128,17 +133,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // From popup — save current page
+  // From popup — save current page (with layout awareness)
   if (request.action === 'saveCurrentPage') {
     const tab = sender.tab || request.tab;
+    const captureType = request.captureType || 'page';
     if (tab && tab.id) {
-      chrome.tabs.sendMessage(tab.id, { action: 'buildCapturePackage', captureType: 'page' }, (response) => {
+      chrome.tabs.sendMessage(tab.id, { action: 'buildCapturePackage', captureType: captureType }, (response) => {
         if (response && response.package) {
           sendCapturePackage(response.package, tab.id);
         }
       });
     }
     sendResponse({ success: true });
+    return true;
+  }
+
+  // From popup — get layout info for current tab
+  if (request.action === 'getLayout') {
+    chrome.tabs.sendMessage(sender.tab?.id || request.tab?.id, { action: 'getLayout' }, (response) => {
+      sendResponse(response?.layout || null);
+    });
     return true;
   }
 
@@ -200,22 +214,20 @@ function sendCapturePackage(pkg, tabId) {
 }
 
 // --- Fallback: basic text-only capture ---
-function sendBasicCapture(tab, text) {
+function sendBasicCapture(tab, text, captureType) {
   const now = new Date().toISOString();
   let siteName = '';
   try { siteName = new URL(tab.url).hostname.replace('www.', ''); } catch (e) {}
 
   const pkg = {
     version: '1.0',
-    capture_type: 'snippet',
+    capture_type: captureType || 'snippet',
     source: {
       url: tab.url || '',
       title: tab.title || '',
       site_name: siteName
     },
-    anchor: {
-      selected_text: text || null
-    },
+    anchor: text ? { selected_text: text } : null,
     tags: [],
     project: ''
   };

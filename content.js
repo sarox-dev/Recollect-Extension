@@ -1,15 +1,46 @@
-// content.js — Recollect Extension Content Script (Fāze 1)
+// content.js — Recollect Extension Content Script (Fāze 1 + Layout)
 // Collects full page data for Capture Package
-// - Page HTML, metadata (OG, Twitter, Schema.org)
-// - Selection anchor with CSS selector, XPath, context
+// Supports Capture Layout — domain-specific buttons and selectors
 
 const CONTEXT_CHARS = 1500;
+
+// --- Layout cache (fetched from backend on page load) ---
+let pageLayout = null;
+let layoutFetched = false;
 
 // --- Sentinel for homepage detection ---
 const sentinel = document.createElement('meta');
 sentinel.name = 'recollect-extension';
 sentinel.content = 'installed';
 document.head.appendChild(sentinel);
+
+// --- Fetch layout from backend ---
+function fetchLayout() {
+  if (layoutFetched) return;
+  layoutFetched = true;
+
+  chrome.storage.sync.get(['apiUrl'], (settings) => {
+    const baseUrl = (settings.apiUrl || 'http://localhost:5000/api/capture')
+      .replace(/\/api\/capture.*$/, '').replace(/\/api$/, '') || 'http://localhost:5000';
+    const checkUrl = `${baseUrl}/api/layouts/check?url=${encodeURIComponent(window.location.href)}`;
+
+    fetch(checkUrl)
+      .then(res => res.json())
+      .then(data => {
+        pageLayout = data;
+      })
+      .catch(() => {
+        // Backend not available — use defaults
+        pageLayout = {
+          matched: false,
+          capture_types: [{ type: 'page', label: 'Save Page', priority: 0 }]
+        };
+      });
+  });
+}
+
+// Fetch layout on page load
+fetchLayout();
 
 // --- Listen for background script requests ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -19,9 +50,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'buildCapturePackage') {
-    const captureType = request.captureType || 'page';
-    const package = buildCapturePackage(captureType);
-    sendResponse({ package });
+    const captureType = request.captureType || getDefaultCaptureType();
+    const pkg = buildCapturePackage(captureType);
+    sendResponse({ package: pkg });
+  }
+
+  if (request.action === 'getLayout') {
+    sendResponse({ layout: pageLayout });
   }
 
   if (request.action === 'showToast') {
@@ -29,13 +64,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+function getDefaultCaptureType() {
+  if (!pageLayout || !pageLayout.capture_types || pageLayout.capture_types.length === 0) {
+    return 'page';
+  }
+  // Return highest priority capture type
+  const sorted = [...pageLayout.capture_types].sort((a, b) => b.priority - a.priority);
+  return sorted[0].type;
+}
+
+function getLayoutForType(captureType) {
+  if (!pageLayout || !pageLayout.capture_types) return null;
+  return pageLayout.capture_types.find(c => c.type === captureType) || null;
+}
+
 // --- Build complete Capture Package ---
 function buildCapturePackage(captureType) {
   const sel = window.getSelection();
   const hasSelection = sel.toString().trim().length > 0;
 
-  const anchor = hasSelection ? buildAnchor(sel) : null;
-  const metadata = extractPageMetadata();
+  const layoutConfig = getLayoutForType(captureType);
+
+  // If layout has a specific selector, try to capture that element
+  let anchor = null;
+  if (hasSelection) {
+    anchor = buildAnchor(sel);
+  } else if (layoutConfig && layoutConfig.selector) {
+    // No text selection, but layout defines a selector — capture that element
+    const element = document.querySelector(layoutConfig.selector);
+    if (element) {
+      const range = document.createRange();
+      range.selectNode(element);
+      const syntheticSel = {
+        getRangeAt: () => range,
+        toString: () => element.textContent || '',
+        rangeCount: 1
+      };
+      // Use try-catch since createRange might not work everywhere
+      try {
+        anchor = buildAnchor(syntheticSel);
+      } catch (e) {}
+    }
+  }
+
+  const metadata = (pageLayout && pageLayout.collect_metadata !== false)
+    ? extractPageMetadata()
+    : null;
+
+  const collectHtml = !pageLayout || pageLayout.collect_html !== false;
 
   return {
     version: '1.0',
@@ -51,9 +127,7 @@ function buildCapturePackage(captureType) {
     anchor: anchor,
     tags: [],
     project: '',
-    page_html: captureType === 'page' || captureType === 'article'
-      ? document.documentElement.outerHTML
-      : null
+    page_html: collectHtml ? document.documentElement.outerHTML : null
   };
 }
 
@@ -115,10 +189,8 @@ function extractPageMetadata() {
 // --- Extract site name from URL ---
 function extractSiteName() {
   try {
-    // Try OG first
     const ogSite = document.querySelector('meta[property="og:site_name"]');
     if (ogSite) return ogSite.getAttribute('content') || '';
-    // Fallback to hostname
     return new URL(window.location.href).hostname.replace('www.', '');
   } catch (e) {
     return '';
@@ -136,16 +208,10 @@ function buildAnchor(sel) {
     ? container.parentElement
     : container;
 
-  // CSS selector
   const cssSelector = buildCssSelector(parentEl);
-
-  // XPath
   const xpath = buildXPath(parentEl);
-
-  // Selection HTML
   const selectionHtml = getSelectionHtml(sel, range);
 
-  // Tag ancestry
   const tagAncestry = [];
   let el = parentEl;
   const semanticTags = ['h1','h2','h3','h4','h5','h6','p','li','blockquote','pre','code','td','th','dt','dd','figcaption','article','section','main'];
@@ -157,7 +223,6 @@ function buildAnchor(sel) {
     el = el.parentElement;
   }
 
-  // Before/after context
   const fullText = parentEl.textContent || '';
   const textOffset = fullText.indexOf(text);
   let beforeText = '';
@@ -175,7 +240,6 @@ function buildAnchor(sel) {
     }
   }
 
-  // Selected tag name
   let selectedTag = '';
   try {
     let node = range.startContainer;
@@ -215,7 +279,6 @@ function buildCssSelector(el) {
         selector += '.' + classes.join('.');
       }
     }
-    // Add nth-child for uniqueness
     const parent = current.parentElement;
     if (parent) {
       const siblings = Array.from(parent.children).filter(
@@ -243,7 +306,6 @@ function buildXPath(el) {
     let index = 1;
     const sibling = current.previousElementSibling;
     if (sibling) {
-      // Count preceding siblings with same tag
       let sib = sibling;
       while (sib) {
         if (sib.tagName === current.tagName) index++;
