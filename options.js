@@ -1,4 +1,4 @@
-// options.js — Recollect Extension Settings
+// options.js — Nodecast Extension Settings
 
 const apiUrlInput = document.getElementById('apiUrl');
 const apiTokenInput = document.getElementById('apiToken');
@@ -55,7 +55,7 @@ function testApiConnection() {
       testResult.className = 'test-result success';
     })
     .catch(() => {
-      testResult.textContent = 'Connection failed — is Recollect Core running?';
+      testResult.textContent = 'Connection failed — is Nodecast Core running?';
       testResult.className = 'test-result error';
     });
 }

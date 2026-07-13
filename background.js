@@ -1,5 +1,5 @@
-// background.js — Recollect Extension Service Worker (Fāze 1 + Layout)
-// Sends Capture Package to Recollect Core API
+// background.js — Nodecast Extension Service Worker (Fāze 1 + Layout)
+// Sends Capture Package to Nodecast Core API
 // Supports Capture Layout — domain-specific capture types
 
 const DEFAULT_API_URL = 'http://localhost:5000/api/capture';
@@ -10,19 +10,19 @@ chrome.runtime.onInstalled.addListener(() => {
     // Selection context — always
     chrome.contextMenus.create({
       id: 'save-selection',
-      title: 'Save selection to Recollect',
+      title: 'Save selection to Nodecast',
       contexts: ['selection']
     });
     // Page context — basic
     chrome.contextMenus.create({
       id: 'save-page',
-      title: 'Save page to Recollect',
+      title: 'Save page to Nodecast',
       contexts: ['page']
     });
     // Link context
     chrome.contextMenus.create({
       id: 'save-link',
-      title: 'Save link to Recollect',
+      title: 'Save link to Nodecast',
       contexts: ['link']
     });
   });
@@ -40,9 +40,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'save-selection', title: 'Save selection to Recollect', contexts: ['selection'] });
-    chrome.contextMenus.create({ id: 'save-page', title: 'Save page to Recollect', contexts: ['page'] });
-    chrome.contextMenus.create({ id: 'save-link', title: 'Save link to Recollect', contexts: ['link'] });
+    chrome.contextMenus.create({ id: 'save-selection', title: 'Save selection to Nodecast', contexts: ['selection'] });
+    chrome.contextMenus.create({ id: 'save-page', title: 'Save page to Nodecast', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'save-link', title: 'Save link to Nodecast', contexts: ['link'] });
   });
 });
 
@@ -98,7 +98,7 @@ chrome.commands.onCommand.addListener((command) => {
       });
     });
   }
-  if (command === 'open-recollect') {
+  if (command === 'open-nodecast') {
     chrome.tabs.create({ url: 'http://localhost:5000' });
   }
 });
@@ -107,8 +107,19 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // From content.js — save Capture Package
   if (request.action === 'saveCapturePackage' && request.package) {
-    const tabId = sender.tab?.id;
-    sendCapturePackage(request.package, tabId);
+    let tabId = sender.tab?.id;
+    // Fallback: try to find active tab
+    if (!tabId) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+          sendCapturePackage(request.package, tabs[0].id);
+        } else {
+          sendCapturePackage(request.package, null);
+        }
+      });
+    } else {
+      sendCapturePackage(request.package, tabId);
+    }
     sendResponse({ success: true });
     return true;
   }
@@ -156,8 +167,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // From popup — open Recollect
-  if (request.action === 'openRecollect') {
+  // From popup — open Nodecast
+  if (request.action === 'openNodecast') {
     chrome.storage.sync.get(['apiUrl'], (s) => {
       const baseUrl = s.apiUrl || DEFAULT_API_URL;
       const origin = baseUrl.replace(/\/api\/capture.*$/, '').replace(/\/api$/, '') || 'http://localhost:5000';
@@ -199,16 +210,16 @@ function sendCapturePackage(pkg, tabId) {
           const highlights = [entry, ...result.highlights].slice(0, 100);
           chrome.storage.local.set({ highlights });
         });
-        showToast(tabId, 'Saved to Recollect', false);
-        console.log('Recollect: saved', data.id);
+        showToast(tabId, 'Saved to Nodecast', false);
+        console.log('Nodecast: saved', data.id);
       } else {
-        console.error('Recollect API error:', data);
+        console.error('Nodecast API error:', data);
         showToast(tabId, 'Save failed', true);
       }
     })
     .catch(err => {
-      console.error('Recollect API unavailable:', err);
-      showToast(tabId, 'Recollect server unavailable', true);
+      console.error('Nodecast API unavailable:', err);
+      showToast(tabId, 'Nodecast server unavailable', true);
     });
   });
 }

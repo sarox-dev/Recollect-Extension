@@ -1,14 +1,14 @@
-// popup.js — Recollect Extension Popup
+// popup.js — Nodecast Extension Popup
 
 const saveSelectionBtn = document.getElementById('saveSelectionBtn');
 const savePageBtn = document.getElementById('savePageBtn');
-const openRecollectBtn = document.getElementById('openRecollectBtn');
+const openNodecastBtn = document.getElementById('openNodecastBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const projectSelect = document.getElementById('projectSelect');
 const newProjectBtn = document.getElementById('newProjectBtn');
 const shortcutSaveSelection = document.getElementById('shortcut-save-selection');
 const shortcutSavePage = document.getElementById('shortcut-save-page');
-const shortcutOpenRecollect = document.getElementById('shortcut-open-recollect');
+const shortcutOpenNodecast = document.getElementById('shortcut-open-nodecast');
 
 // --- Load projects & settings ---
 function loadProjects() {
@@ -89,7 +89,7 @@ saveSelectionBtn.addEventListener('click', () => {
         selectedTagsAncestry: data.selectedTagsAncestry
       }, (res) => {
         if (res && res.success) {
-          showGlow('Saved to Recollect');
+          showGlow('Saved to Nodecast');
         } else {
           showGlow(res?.message || 'Save failed', true);
         }
@@ -115,9 +115,9 @@ savePageBtn.addEventListener('click', () => {
   });
 });
 
-// --- Open Recollect ---
-openRecollectBtn.addEventListener('click', () => {
-  chrome.runtime.sendMessage({ action: 'openRecollect' });
+// --- Open Nodecast ---
+openNodecastBtn.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: 'openNodecast' });
   window.close();
 });
 
@@ -128,7 +128,7 @@ settingsBtn.addEventListener('click', () => {
 
 // --- Glow notification (in-page overlay) ---
 function showGlow(msg, isError) {
-  const existing = document.getElementById('recollect-glow');
+  const existing = document.getElementById('nodecast-glow');
   if (existing) existing.remove();
 
   chrome.storage.sync.get(['glowPosition'], (settings) => {
@@ -144,7 +144,7 @@ function showGlow(msg, isError) {
     const pos = positions[position] || positions['top-center'];
 
     const glow = document.createElement('div');
-    glow.id = 'recollect-glow';
+    glow.id = 'nodecast-glow';
     glow.textContent = msg;
     Object.assign(glow.style, {
       position: 'fixed',
@@ -192,8 +192,8 @@ chrome.commands.getAll((commands) => {
         if (cmd.name === 'save-page' && shortcutSavePage) {
             shortcutSavePage.textContent = cmd.shortcut || '';
         }
-        if (cmd.name === 'open-recollect' && shortcutOpenRecollect) {
-            shortcutOpenRecollect.textContent = cmd.shortcut || '';
+        if (cmd.name === 'open-nodecast' && shortcutOpenNodecast) {
+            shortcutOpenNodecast.textContent = cmd.shortcut || '';
         }
     });
 });

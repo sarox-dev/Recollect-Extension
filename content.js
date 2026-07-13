@@ -1,4 +1,4 @@
-// content.js — Recollect Extension Content Script (Fāze 1 + Layout)
+// content.js — Nodecast Extension Content Script (Fāze 1 + Layout)
 // Collects full page data for Capture Package
 // Supports Capture Layout — domain-specific buttons and selectors
 
@@ -10,7 +10,7 @@ let layoutFetched = false;
 
 // --- Sentinel for homepage detection ---
 const sentinel = document.createElement('meta');
-sentinel.name = 'recollect-extension';
+sentinel.name = 'nodecast-extension';
 sentinel.content = 'installed';
 document.head.appendChild(sentinel);
 
@@ -39,7 +39,82 @@ function fetchLayout() {
   });
 }
 
-// Fetch layout on page load
+// --- Inline Save Buttons ---
+// Pēc layout ielādes, ja ir specifiski capture tipi, injectē pogas lapā
+function injectSaveButtons(layout) {
+  if (!layout || !layout.matched || !layout.capture_types) return;
+  if (layout.layout_name === 'default') return; // Skip default — no special buttons
+
+  const container = document.createElement('div');
+  container.id = 'nodecast-inline-buttons';
+  container.style.cssText = 'position:fixed;top:10px;right:10px;z-index:2147483647;display:flex;flex-direction:column;gap:4px;';
+
+  layout.capture_types.forEach(ct => {
+    const btn = document.createElement('button');
+    btn.textContent = ct.label || `Save ${ct.type}`;
+    btn.dataset.captureType = ct.type;
+    btn.dataset.selector = ct.selector || '';
+    btn.title = ct.label;
+    btn.style.cssText = 'padding:6px 12px;border-radius:6px;border:1px solid #30363d;background:#238636;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif;white-space:nowrap;';
+    btn.addEventListener('mouseenter', () => { btn.style.background = '#2ea043'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = '#238636'; });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // If there's a selector, highlight the element
+      if (ct.selector) {
+        const el = document.querySelector(ct.selector);
+        if (el) {
+          el.style.outline = '2px solid #238636';
+          el.style.outlineOffset = '2px';
+          setTimeout(() => { el.style.outline = ''; }, 2000);
+        }
+      }
+      // Build and send capture
+      const pkg = buildCapturePackage(ct.type);
+      if (pkg) {
+        chrome.runtime.sendMessage({ action: 'saveCapturePackage', package: pkg });
+      }
+    });
+    container.appendChild(btn);
+  });
+
+  document.body.appendChild(container);
+
+  // Auto-remove after 10s (user can still click other buttons)
+  setTimeout(() => {
+    const existing = document.getElementById('nodecast-inline-buttons');
+    if (existing) existing.style.opacity = '0';
+    setTimeout(() => { if (existing) existing.remove(); }, 300);
+  }, 10000);
+}
+
+// Override fetchLayout to also inject buttons
+const _origFetchLayout = fetchLayout;
+fetchLayout = function() {
+  if (layoutFetched) return;
+  layoutFetched = true;
+
+  chrome.storage.sync.get(['apiUrl'], (settings) => {
+    const baseUrl = (settings.apiUrl || 'http://localhost:5000/api/capture')
+      .replace(/\/api\/capture.*$/, '').replace(/\/api$/, '') || 'http://localhost:5000';
+    const checkUrl = `${baseUrl}/api/layouts/check?url=${encodeURIComponent(window.location.href)}`;
+
+    fetch(checkUrl)
+      .then(res => res.json())
+      .then(data => {
+        pageLayout = data;
+        injectSaveButtons(data);  // NEW: inject buttons
+      })
+      .catch(() => {
+        pageLayout = {
+          matched: false,
+          capture_types: [{ type: 'page', label: 'Save Page', priority: 0 }]
+        };
+      });
+  });
+};
+
+// Call the updated fetchLayout
 fetchLayout();
 
 // --- Listen for background script requests ---
@@ -180,9 +255,9 @@ function extractPageMetadata() {
     language: language || null,
     charset: charset || null,
     favicon: favicon || null,
-    open_graph: Object.keys(og).length > 0 ? og : null,
-    twitter_card: Object.keys(twitter).length > 0 ? twitter : null,
-    schema_org: schemaOrg.length > 0 ? schemaOrg : null
+    open_graph: Object.keys(og).length > 0 ? og : {},
+    twitter_card: Object.keys(twitter).length > 0 ? twitter : {},
+    schema_org: schemaOrg.length > 0 ? schemaOrg : []
   };
 }
 
@@ -332,7 +407,7 @@ function getSelectionHtml(sel, range) {
 
 // --- Glowing notification ---
 function showGlow(message, isError) {
-  const existing = document.getElementById('recollect-glow');
+  const existing = document.getElementById('nodecast-glow');
   if (existing) existing.remove();
 
   chrome.storage.sync.get(['glowPosition'], (settings) => {
@@ -348,7 +423,7 @@ function showGlow(message, isError) {
     const pos = positions[position] || positions['top-center'];
 
     const glow = document.createElement('div');
-    glow.id = 'recollect-glow';
+    glow.id = 'nodecast-glow';
     glow.textContent = message;
     Object.assign(glow.style, {
       position: 'fixed',
