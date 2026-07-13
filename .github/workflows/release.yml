@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-version:refname | grep -vx "$CURRENT_TAG" | head -n1)
+
+          if [ -z "$PREV_TAG" ]; then
+            {
+              echo "notes<<EOF"
+              echo "## What's changed"
+              echo
+              echo "Initial release."
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "notes<<EOF"
+              echo "## What's changed since $PREV_TAG"
+              echo
+              git log "$PREV_TAG..HEAD" --pretty=format:"- %s (%h)"
+              echo
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package extension
+        shell: bash
+        run: |
+          mkdir -p dist
+          zip -r dist/nodecast-extension.zip . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "dist/*" \
+            -x "nodecast-logo.png" \
+            -x "*.md"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Nodecast Extension ${{ github.ref_name }}
+
+          body: |
+            ${{ steps.notes.outputs.notes }}
+
+            ## Installation
+
+            1. Download `nodecast-extension.zip` from this release
+            2. Unzip the file
+            3. Open Chrome/Edge and go to `chrome://extensions/`
+            4. Enable **Developer mode** (toggle in top-right)
+            5. Click **Load unpacked** and select the unzipped folder
+
+            ## Manual setup
+
+            ```bash
+            git clone https://github.com/sarox-dev/Nodecast-Extension.git
+            cd Nodecast-Extension
+            git checkout ${{ github.ref_name }}
+            ```
+
+            Then load the folder as an unpacked extension in Chrome/Edge.
+
+          files: |
+            dist/nodecast-extension.zip
+
+          overwrite_files: true
+          draft: false
+          prerelease: false
