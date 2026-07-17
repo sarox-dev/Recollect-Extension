@@ -64,8 +64,23 @@
       </div>
       <div class="field">
         <label for="apiToken">API Token</label>
-        <input type="text" id="apiToken" placeholder="Paste your JWT token here" />
-        <p class="hint">Required only when Nodecast is on a <strong>remote server</strong> (not localhost). If running locally, log in to the Web UI first and the session cookie is used automatically. Get token: Web UI sidebar → <strong>Copy API Token</strong>.</p>
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <input type="text" id="apiToken" placeholder="Paste your JWT token here" style="flex:1" />
+          <button id="getTokenBtn" class="btn btn-secondary" style="white-space:nowrap">Get Token</button>
+        </div>
+        <p class="hint">Generate a token by logging into your Nodecast account below, or paste one manually.</p>
+      </div>
+      <div id="token-login-section" style="display:none;margin-top:0.5rem;padding:0.5rem;background:#f5f5f5;border-radius:6px">
+        <div class="field" style="margin-bottom:0.3rem">
+          <input type="text" id="tokenUsername" placeholder="Username" style="width:100%" />
+        </div>
+        <div class="field" style="margin-bottom:0.3rem">
+          <input type="password" id="tokenPassword" placeholder="Password" style="width:100%" />
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <button id="generateTokenBtn" class="btn btn-primary">Generate Token</button>
+          <span id="tokenGenResult" class="test-result"></span>
+        </div>
       </div>
       <div class="field">
         <button id="testApiBtn" class="btn btn-secondary">Test Connection</button>

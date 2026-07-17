@@ -102,6 +102,7 @@ input[type="text"]:focus, .select-field:focus {
 .test-result { margin-left: 12px; font-size: 0.82rem; color: #6b7280; }
 .test-result.success { color: #10b981; }
 .test-result.error { color: #ef4444; }
+.test-result.warning { color: #f59e0b; }
 
 /* Toggle switch */
 .toggle-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
